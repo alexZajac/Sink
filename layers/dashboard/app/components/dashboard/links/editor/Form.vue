@@ -24,6 +24,14 @@ const optionalUrlValidator = z.string().trim().url().max(2048).optional().or(z.l
 
 const generateSlug = nanoid()
 
+// When editing a weighted link, targets[0] is the primary URL's weighted entry.
+// Separate it out so the form only manages the variant targets.
+const storedTargets = props.link.targets ?? []
+const initialPrimaryWeight = storedTargets[0]?.weight
+const initialFormTargets = storedTargets.length >= 1 ? storedTargets.slice(1) : []
+
+const primaryWeight = ref<number | undefined>(initialPrimaryWeight)
+
 const form = useForm({
   defaultValues: {
     url: props.link.url ?? '',
@@ -41,10 +49,11 @@ const form = useForm({
     redirectWithQuery: props.link.redirectWithQuery ?? false,
     password: props.link.password ?? '',
     unsafe: props.link.unsafe ?? false,
-    targets: props.link.targets ?? [],
+    targets: initialFormTargets,
   } satisfies LinkFormData,
   onSubmit: async ({ value }) => {
     try {
+      const hasWeightedTargets = value.targets && value.targets.length >= 1
       const linkData = {
         url: value.url,
         slug: value.slug,
@@ -61,7 +70,9 @@ const form = useForm({
         redirectWithQuery: value.redirectWithQuery,
         password: value.password || undefined,
         unsafe: value.unsafe || undefined,
-        targets: value.targets && value.targets.length >= 2 ? value.targets : undefined,
+        targets: hasWeightedTargets
+          ? [{ url: value.url, weight: primaryWeight.value ?? 0 }, ...value.targets!]
+          : undefined,
       }
       const { link: newLink } = await useAPI<{ link: Link }>(
         props.isEdit ? '/api/link/edit' : '/api/link/create',
@@ -155,11 +166,20 @@ function setTargets(newTargets: LinkTarget[]) {
 }
 
 function addTarget() {
-  setTargets([...targetsValue.value, { url: '', weight: 0 }])
+  if (targetsValue.value.length === 0) {
+    primaryWeight.value = 0.5
+    setTargets([{ url: '', weight: 0.5 }])
+  }
+  else {
+    setTargets([...targetsValue.value, { url: '', weight: 0 }])
+  }
 }
 
 function removeTarget(index: number) {
-  setTargets(targetsValue.value.filter((_, i) => i !== index))
+  const next = targetsValue.value.filter((_, i) => i !== index)
+  if (next.length === 0)
+    primaryWeight.value = undefined
+  setTargets(next)
 }
 
 function updateTargetUrl(index: number, url: string) {
@@ -171,8 +191,12 @@ function updateTargetWeight(index: number, raw: string) {
   setTargets(targetsValue.value.map((t, i) => i === index ? { ...t, weight: Number.isNaN(weight) ? 0 : weight } : t))
 }
 
-const weightSum = computed(() => targetsValue.value.reduce((s, t) => s + (t.weight || 0), 0))
-const weightsValid = computed(() => targetsValue.value.length < 2 || Math.abs(weightSum.value - 1.0) < 0.001)
+const weightSum = computed(() =>
+  (primaryWeight.value ?? 0) + targetsValue.value.reduce((s, t) => s + (t.weight || 0), 0),
+)
+const weightsValid = computed(() =>
+  targetsValue.value.length === 0 || Math.abs(weightSum.value - 1.0) < 0.001,
+)
 
 const { previewMode } = useRuntimeConfig().public
 
@@ -202,16 +226,31 @@ defineExpose({ randomSlug })
           <FieldLabel :for="field.name">
             {{ $t('links.form.url') }}
           </FieldLabel>
-          <Input
-            :id="field.name"
-            :name="field.name"
-            :model-value="field.state.value"
-            :aria-invalid="getAriaInvalid(field)"
-            placeholder="https://example.com"
-            autocomplete="url"
-            @blur="field.handleBlur"
-            @input="field.handleChange(($event.target as HTMLInputElement).value)"
-          />
+          <div class="flex items-center gap-2">
+            <Input
+              :id="field.name"
+              :name="field.name"
+              :model-value="field.state.value"
+              :aria-invalid="getAriaInvalid(field)"
+              placeholder="https://example.com"
+              autocomplete="url"
+              class="flex-1"
+              @blur="field.handleBlur"
+              @input="field.handleChange(($event.target as HTMLInputElement).value)"
+            />
+            <Input
+              v-if="targetsValue.length > 0"
+              type="number"
+              :model-value="primaryWeight"
+              placeholder="0.5"
+              step="0.01"
+              min="0.01"
+              max="1"
+              class="w-20 shrink-0"
+              aria-label="Primary URL weight"
+              @input="primaryWeight = Number.parseFloat(($event.target as HTMLInputElement).value)"
+            />
+          </div>
           <FieldError
             v-if="isInvalid(field)"
             :errors="formatErrors(field.state.meta.errors)"
@@ -219,7 +258,7 @@ defineExpose({ randomSlug })
         </Field>
       </form.Field>
 
-      <!-- Weighted targets -->
+      <!-- Weighted variant rows -->
       <div v-if="targetsValue.length > 0" class="space-y-2">
         <div
           v-for="(target, index) in targetsValue"
@@ -258,6 +297,7 @@ defineExpose({ randomSlug })
           {{ $t('links.form.weighted_targets_sum_warning', { sum: weightSum.toFixed(3) }) }}
         </p>
       </div>
+
       <Button
         v-if="targetsValue.length < 20"
         type="button"
