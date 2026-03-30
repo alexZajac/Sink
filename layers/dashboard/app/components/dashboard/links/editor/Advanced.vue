@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { DateValue } from '@internationalized/date'
 import type { Component } from 'vue'
-import type { AnyFieldApi, LinkFormData, LinkTarget } from '@/types'
+import type { AnyFieldApi, LinkFormData } from '@/types'
 import { today } from '@internationalized/date'
-import { CalendarIcon, PlusIcon, Trash2Icon } from 'lucide-vue-next'
+import { CalendarIcon } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 
 const props = defineProps<{
@@ -11,8 +11,6 @@ const props = defineProps<{
     Field: Component
     getFieldValue: (name: keyof LinkFormData) => LinkFormData[keyof LinkFormData]
   }
-  targetsValue: LinkTarget[]
-  setTargets: (targets: LinkTarget[]) => void
   validateOptionalUrl: (ctx: { value: string }) => string | undefined
   isInvalid: (field: AnyFieldApi) => boolean
   getAriaInvalid: (field: AnyFieldApi) => string | undefined
@@ -22,7 +20,6 @@ const props = defineProps<{
 
 const datePickerOpen = ref(false)
 
-// Compute default open items based on existing values
 const defaultOpenItems = computed(() => {
   const items: string[] = []
   if (props.form.getFieldValue('expiration')) {
@@ -37,41 +34,8 @@ const defaultOpenItems = computed(() => {
   if (props.form.getFieldValue('cloaking') || props.form.getFieldValue('redirectWithQuery') || props.form.getFieldValue('password') || props.form.getFieldValue('unsafe')) {
     items.push('link_settings')
   }
-  if (props.targetsValue.length >= 2) {
-    items.push('weighted_targets')
-  }
   return items
 })
-
-const targets = computed(() => props.targetsValue)
-
-const weightSum = computed(() => targets.value.reduce((s, t) => s + (t.weight || 0), 0))
-
-const weightsValid = computed(() => Math.abs(weightSum.value - 1.0) < 0.001)
-
-function addTarget() {
-  props.setTargets([...targets.value, { url: '', weight: 0 }])
-}
-
-function removeTarget(index: number) {
-  props.setTargets(targets.value.filter((_, i) => i !== index))
-}
-
-function updateTargetUrl(index: number, url: string) {
-  props.setTargets(targets.value.map((t, i) => i === index ? { ...t, url } : t))
-}
-
-function updateTargetWeight(index: number, raw: string) {
-  const weight = Number.parseFloat(raw)
-  props.setTargets(targets.value.map((t, i) => i === index ? { ...t, weight: Number.isNaN(weight) ? 0 : weight } : t))
-}
-
-function targetPercent(weight: number): string {
-  const total = weightSum.value
-  if (!total)
-    return '0'
-  return ((weight / total) * 100).toFixed(1)
-}
 </script>
 
 <template>
@@ -258,96 +222,6 @@ function targetPercent(weight: number): string {
             </Field>
           </props.form.Field>
         </FieldGroup>
-      </AccordionContent>
-    </AccordionItem>
-
-    <AccordionItem value="weighted_targets">
-      <AccordionTrigger>{{ $t('links.form.weighted_targets') }}</AccordionTrigger>
-      <AccordionContent class="px-1">
-        <p class="mb-3 text-xs text-muted-foreground">
-          {{ $t('links.form.weighted_targets_description') }}
-        </p>
-        <div class="space-y-2">
-          <div
-            v-for="(target, index) in targets"
-            :key="index"
-            class="flex items-start gap-2"
-          >
-            <div class="flex flex-1 flex-col gap-1">
-              <Input
-                :model-value="target.url"
-                :placeholder="$t('links.form.weighted_target_url')"
-                autocomplete="off"
-                @input="updateTargetUrl(index, ($event.target as HTMLInputElement).value)"
-              />
-            </div>
-            <div class="flex w-24 flex-col gap-1">
-              <Input
-                type="number"
-                :model-value="target.weight"
-                placeholder="0.5"
-                step="0.01"
-                min="0.01"
-                max="1"
-                @input="updateTargetWeight(index, ($event.target as HTMLInputElement).value)"
-              />
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              class="mt-0.5 shrink-0"
-              :aria-label="$t('links.form.weighted_target_remove')"
-              @click="removeTarget(index)"
-            >
-              <Trash2Icon class="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div v-if="targets.length >= 2" class="mt-3 space-y-1">
-          <div class="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              v-for="(target, index) in targets"
-              :key="index"
-              class="h-full transition-all"
-              :style="{
-                width: `${targetPercent(target.weight)}%`,
-                backgroundColor: `hsl(${(index * 60) % 360}, 70%, 55%)`,
-              }"
-            />
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <span
-              v-for="(target, index) in targets"
-              :key="index"
-              class="text-xs text-muted-foreground"
-            >
-              {{ targetPercent(target.weight) }}%
-            </span>
-          </div>
-          <p v-if="!weightsValid" class="text-xs text-destructive">
-            {{ $t('links.form.weighted_targets_sum_warning', { sum: weightSum.toFixed(3) }) }}
-          </p>
-        </div>
-
-        <p
-          v-if="targets.length < 2 && targets.length > 0" class="
-            mt-2 text-xs text-muted-foreground
-          "
-        >
-          {{ $t('links.form.weighted_targets_min_warning') }}
-        </p>
-
-        <Button
-          variant="outline"
-          size="sm"
-          class="mt-3 w-full"
-          :disabled="targets.length >= 20"
-          @click="addTarget"
-        >
-          <PlusIcon class="mr-1.5 h-4 w-4" />
-          {{ $t('links.form.weighted_target_add') }}
-        </Button>
       </AccordionContent>
     </AccordionItem>
 

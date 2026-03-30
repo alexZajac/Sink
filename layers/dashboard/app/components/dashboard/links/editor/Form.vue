@@ -2,7 +2,7 @@
 import type { AnyFieldApi, Link, LinkFormData, LinkTarget } from '@/types'
 import { LinkSchema, nanoid } from '#shared/schemas/link'
 import { useForm } from '@tanstack/vue-form'
-import { Shuffle, Sparkles } from 'lucide-vue-next'
+import { PlusIcon, Shuffle, Sparkles, Trash2Icon } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { z } from 'zod'
 
@@ -145,9 +145,34 @@ async function aiSlug() {
 const currentSlug = form.useStore(state => state.values.slug || '')
 const targetsValue = form.useStore(state => state.values.targets ?? [])
 
+const requestUrl = useRequestURL()
+const shortLinkPreview = computed(() =>
+  currentSlug.value ? `${requestUrl.origin}/${currentSlug.value}` : '',
+)
+
 function setTargets(newTargets: LinkTarget[]) {
   form.setFieldValue('targets', newTargets)
 }
+
+function addTarget() {
+  setTargets([...targetsValue.value, { url: '', weight: 0 }])
+}
+
+function removeTarget(index: number) {
+  setTargets(targetsValue.value.filter((_, i) => i !== index))
+}
+
+function updateTargetUrl(index: number, url: string) {
+  setTargets(targetsValue.value.map((t, i) => i === index ? { ...t, url } : t))
+}
+
+function updateTargetWeight(index: number, raw: string) {
+  const weight = Number.parseFloat(raw)
+  setTargets(targetsValue.value.map((t, i) => i === index ? { ...t, weight: Number.isNaN(weight) ? 0 : weight } : t))
+}
+
+const weightSum = computed(() => targetsValue.value.reduce((s, t) => s + (t.weight || 0), 0))
+const weightsValid = computed(() => targetsValue.value.length < 2 || Math.abs(weightSum.value - 1.0) < 0.001)
 
 const { previewMode } = useRuntimeConfig().public
 
@@ -193,6 +218,60 @@ defineExpose({ randomSlug })
           />
         </Field>
       </form.Field>
+
+      <!-- Weighted targets -->
+      <div v-if="targetsValue.length > 0" class="space-y-2">
+        <div
+          v-for="(target, index) in targetsValue"
+          :key="index"
+          class="flex items-center gap-2"
+        >
+          <Input
+            :model-value="target.url"
+            placeholder="https://example.com"
+            autocomplete="off"
+            class="flex-1"
+            @input="updateTargetUrl(index, ($event.target as HTMLInputElement).value)"
+          />
+          <Input
+            type="number"
+            :model-value="target.weight || ''"
+            placeholder="0.5"
+            step="0.01"
+            min="0.01"
+            max="1"
+            class="w-20 shrink-0"
+            @input="updateTargetWeight(index, ($event.target as HTMLInputElement).value)"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            class="shrink-0"
+            aria-label="Remove target"
+            @click="removeTarget(index)"
+          >
+            <Trash2Icon class="h-4 w-4" />
+          </Button>
+        </div>
+        <p v-if="!weightsValid" class="text-xs text-destructive">
+          {{ $t('links.form.weighted_targets_sum_warning', { sum: weightSum.toFixed(3) }) }}
+        </p>
+      </div>
+      <Button
+        v-if="targetsValue.length < 20"
+        type="button"
+        variant="ghost"
+        size="sm"
+        class="
+          -mt-1 h-auto w-full justify-start p-0 text-xs text-muted-foreground
+          hover:text-foreground
+        "
+        @click="addTarget"
+      >
+        <PlusIcon class="mr-1 h-3 w-3" />
+        {{ $t('links.form.weighted_target_add') }}
+      </Button>
 
       <form.Field
         v-slot="{ field }"
@@ -244,6 +323,13 @@ defineExpose({ randomSlug })
             v-if="isInvalid(field)"
             :errors="formatErrors(field.state.meta.errors)"
           />
+          <p
+            v-if="shortLinkPreview" class="
+              truncate text-xs text-muted-foreground
+            "
+          >
+            {{ shortLinkPreview }}
+          </p>
         </Field>
       </form.Field>
 
@@ -274,8 +360,6 @@ defineExpose({ randomSlug })
 
     <DashboardLinksEditorAdvanced
       :form="form"
-      :targets-value="targetsValue"
-      :set-targets="setTargets"
       :validate-optional-url="validateOptionalUrl"
       :is-invalid="isInvalid"
       :get-aria-invalid="getAriaInvalid"
