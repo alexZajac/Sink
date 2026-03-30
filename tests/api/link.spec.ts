@@ -277,6 +277,93 @@ describe.sequential('/api/link/edit unsafe', () => {
   })
 })
 
+describe.sequential('/api/link/weighted', () => {
+  const weightedSlug = 'weighted-test-link'
+  const weightedPayload = {
+    url: 'https://example.com',
+    slug: weightedSlug,
+    targets: [
+      { url: 'https://example.com', weight: 0.6 },
+      { url: 'https://other-example.com', weight: 0.4 },
+    ],
+  }
+
+  it('creates a link with weighted targets', async () => {
+    const response = await postJson('/api/link/create', weightedPayload)
+    expect(response.status).toBe(201)
+
+    const data = await response.json() as { link: { targets?: { url: string, weight: number }[] } }
+    expect(data.link.targets).toBeDefined()
+    expect(data.link.targets).toHaveLength(2)
+    expect(data.link.targets![0].url).toBe('https://example.com')
+    expect(data.link.targets![0].weight).toBe(0.6)
+    expect(data.link.targets![1].url).toBe('https://other-example.com')
+    expect(data.link.targets![1].weight).toBe(0.4)
+  })
+
+  it('persists targets - query returns them', async () => {
+    const response = await fetchWithAuth(`/api/link/query?slug=${weightedSlug}`)
+    expect(response.status).toBe(200)
+
+    const data = await response.json() as { targets?: { url: string, weight: number }[] }
+    expect(data.targets).toBeDefined()
+    expect(data.targets).toHaveLength(2)
+  })
+
+  it('persists targets - list returns them', async () => {
+    const response = await fetchWithAuth('/api/link/list')
+    expect(response.status).toBe(200)
+
+    const data = await response.json() as { links: { slug: string, targets?: unknown[] }[] }
+    const weightedLink = data.links.find(l => l.slug === weightedSlug)
+    expect(weightedLink).toBeDefined()
+    expect(weightedLink?.targets).toBeDefined()
+    expect(weightedLink?.targets).toHaveLength(2)
+  })
+
+  it('redirect resolves to one of the weighted target URLs', async () => {
+    const response = await fetch(`/${weightedSlug}`, { redirect: 'manual' })
+    expect([301, 302, 307, 308]).toContain(response.status)
+
+    const location = response.headers.get('location')
+    expect(['https://example.com', 'https://other-example.com']).toContain(location)
+  })
+
+  it('rejects targets with weights not summing to 1.0', async () => {
+    const response = await postJson('/api/link/create', {
+      url: 'https://example.com',
+      slug: 'bad-weights-test',
+      targets: [
+        { url: 'https://example.com', weight: 0.3 },
+        { url: 'https://other.com', weight: 0.3 },
+      ],
+    })
+    expect(response.status).toBe(400)
+  })
+
+  it('rejects targets with fewer than 2 entries', async () => {
+    const response = await postJson('/api/link/create', {
+      url: 'https://example.com',
+      slug: 'too-few-targets',
+      targets: [{ url: 'https://example.com', weight: 1.0 }],
+    })
+    expect(response.status).toBe(400)
+  })
+
+  it('edit removes targets when not provided', async () => {
+    const response = await putJson('/api/link/edit', { url: weightedPayload.url, slug: weightedSlug })
+    expect(response.status).toBe(201)
+
+    const data = await response.json() as { link: { targets?: unknown[] } }
+    expect(data.link.targets).toBeUndefined()
+  })
+
+  it('deletes weighted test link', async () => {
+    const response = await postJson('/api/link/delete', { slug: weightedSlug })
+    expect(response.status).toBe(204)
+  })
+})
+
 describe.sequential('/api/link/delete', () => {
   it('deletes link with valid slug and auth', async () => {
     const response = await postJson('/api/link/delete', { slug: testLinkPayload.slug })
