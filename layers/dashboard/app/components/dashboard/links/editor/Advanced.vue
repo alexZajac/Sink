@@ -11,6 +11,7 @@ const props = defineProps<{
     Field: Component
     getFieldValue: (name: keyof LinkFormData) => LinkFormData[keyof LinkFormData]
   }
+  targetsValue: LinkTarget[]
   setTargets: (targets: LinkTarget[]) => void
   validateOptionalUrl: (ctx: { value: string }) => string | undefined
   isInvalid: (field: AnyFieldApi) => boolean
@@ -36,14 +37,13 @@ const defaultOpenItems = computed(() => {
   if (props.form.getFieldValue('cloaking') || props.form.getFieldValue('redirectWithQuery') || props.form.getFieldValue('password') || props.form.getFieldValue('unsafe')) {
     items.push('link_settings')
   }
-  const targets = props.form.getFieldValue('targets') as LinkTarget[] | undefined
-  if (targets && targets.length >= 2) {
+  if (props.targetsValue.length >= 2) {
     items.push('weighted_targets')
   }
   return items
 })
 
-const targets = computed<LinkTarget[]>(() => (props.form.getFieldValue('targets') as LinkTarget[] | undefined) ?? [])
+const targets = computed(() => props.targetsValue)
 
 const weightSum = computed(() => targets.value.reduce((s, t) => s + (t.weight || 0), 0))
 

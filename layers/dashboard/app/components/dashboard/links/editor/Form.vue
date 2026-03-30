@@ -143,6 +143,7 @@ async function aiSlug() {
 }
 
 const currentSlug = form.useStore(state => state.values.slug || '')
+const targetsValue = form.useStore(state => state.values.targets ?? [])
 
 function setTargets(newTargets: LinkTarget[]) {
   form.setFieldValue('targets', newTargets)
@@ -273,6 +274,7 @@ defineExpose({ randomSlug })
 
     <DashboardLinksEditorAdvanced
       :form="form"
+      :targets-value="targetsValue"
       :set-targets="setTargets"
       :validate-optional-url="validateOptionalUrl"
       :is-invalid="isInvalid"
