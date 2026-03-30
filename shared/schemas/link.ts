@@ -7,6 +7,13 @@ const slugDefaultLength = +useRuntimeConfig().public.slugDefaultLength
 
 export const nanoid = (length: number = slugDefaultLength) => customAlphabet('23456789abcdefghjkmnpqrstuvwxyz', length)
 
+export const LinkTargetSchema = z.object({
+  url: z.string().trim().url().max(2048),
+  weight: z.number().gt(0).lte(1),
+})
+
+export type LinkTarget = z.infer<typeof LinkTargetSchema>
+
 export const LinkSchema = z.object({
   id: z.string().trim().max(26).default(nanoid(10)),
   url: z.string().trim().url().max(2048),
@@ -27,6 +34,14 @@ export const LinkSchema = z.object({
   redirectWithQuery: z.boolean().optional(),
   password: z.string().trim().min(1).max(128).optional(),
   unsafe: z.boolean().optional(),
+  targets: z.array(LinkTargetSchema)
+    .min(2)
+    .max(20)
+    .refine(
+      targets => Math.abs(targets.reduce((s, t) => s + t.weight, 0) - 1.0) < 0.001,
+      { message: 'Weights must sum to 1.0' },
+    )
+    .optional(),
 })
 
 export type Link = z.infer<typeof LinkSchema>

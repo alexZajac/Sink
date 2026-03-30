@@ -56,6 +56,15 @@ export default eventHandler(async (event) => {
       link.unsafe = true
     }
   }
+  if (link.targets && link.unsafe === undefined) {
+    for (const target of link.targets) {
+      const safe = await isSafeUrl(event, target.url)
+      if (!safe) {
+        link.unsafe = true
+        break
+      }
+    }
+  }
 
   const existingLink = await getLink(event, link.slug)
   if (existingLink) {

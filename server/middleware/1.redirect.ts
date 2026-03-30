@@ -1,3 +1,4 @@
+import type { LinkTarget } from '#shared/schemas/link'
 import type { Link } from '@/types'
 import { parsePath, withQuery } from 'ufo'
 
@@ -43,6 +44,17 @@ function getDeviceRedirectUrl(userAgent: string, link: Link): string | null {
 
 function hasOgConfig(link: Link): boolean {
   return !!(link.title || link.image)
+}
+
+function pickWeightedUrl(targets: LinkTarget[]): string {
+  const rand = Math.random()
+  let cumulative = 0
+  for (const target of targets) {
+    cumulative += target.weight
+    if (rand < cumulative)
+      return target.url
+  }
+  return targets[targets.length - 1]!.url
 }
 
 export default eventHandler(async (event) => {
@@ -145,22 +157,26 @@ export default eventHandler(async (event) => {
         return sendRedirect(event, deviceRedirectUrl, +redirectStatusCode)
       }
 
+      const resolvedUrl = (link.targets && link.targets.length >= 2)
+        ? pickWeightedUrl(link.targets)
+        : link.url
+
       if (isSocialBot(userAgent) && hasOgConfig(link)) {
         const baseUrl = `${getRequestProtocol(event)}://${getRequestHost(event)}`
-        const html = generateOgHtml(link, buildTarget(link.url), baseUrl)
+        const html = generateOgHtml(link, buildTarget(resolvedUrl), baseUrl)
         setHeader(event, 'Content-Type', 'text/html; charset=utf-8')
         return html
       }
 
       if (link.cloaking) {
         const baseUrl = `${getRequestProtocol(event)}://${getRequestHost(event)}`
-        const html = generateCloakingHtml(link, buildTarget(link.url), baseUrl)
+        const html = generateCloakingHtml(link, buildTarget(resolvedUrl), baseUrl)
         setHeader(event, 'Content-Type', 'text/html; charset=utf-8')
         setHeader(event, 'Cache-Control', 'no-store, private')
         return html
       }
 
-      return sendRedirect(event, buildTarget(link.url), +redirectStatusCode)
+      return sendRedirect(event, buildTarget(resolvedUrl), +redirectStatusCode)
     }
     else {
       if (notFoundRedirect) {

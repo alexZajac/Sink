@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AnyFieldApi, Link, LinkFormData } from '@/types'
+import type { AnyFieldApi, Link, LinkFormData, LinkTarget } from '@/types'
 import { LinkSchema, nanoid } from '#shared/schemas/link'
 import { useForm } from '@tanstack/vue-form'
 import { Shuffle, Sparkles } from 'lucide-vue-next'
@@ -41,6 +41,7 @@ const form = useForm({
     redirectWithQuery: props.link.redirectWithQuery ?? false,
     password: props.link.password ?? '',
     unsafe: props.link.unsafe ?? false,
+    targets: props.link.targets ?? [],
   } satisfies LinkFormData,
   onSubmit: async ({ value }) => {
     try {
@@ -60,6 +61,7 @@ const form = useForm({
         redirectWithQuery: value.redirectWithQuery,
         password: value.password || undefined,
         unsafe: value.unsafe || undefined,
+        targets: value.targets && value.targets.length >= 2 ? value.targets : undefined,
       }
       const { link: newLink } = await useAPI<{ link: Link }>(
         props.isEdit ? '/api/link/edit' : '/api/link/create',
@@ -141,6 +143,10 @@ async function aiSlug() {
 }
 
 const currentSlug = form.useStore(state => state.values.slug || '')
+
+function setTargets(newTargets: LinkTarget[]) {
+  form.setFieldValue('targets', newTargets)
+}
 
 const { previewMode } = useRuntimeConfig().public
 
@@ -267,6 +273,7 @@ defineExpose({ randomSlug })
 
     <DashboardLinksEditorAdvanced
       :form="form"
+      :set-targets="setTargets"
       :validate-optional-url="validateOptionalUrl"
       :is-invalid="isInvalid"
       :get-aria-invalid="getAriaInvalid"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CounterData, Link } from '@/types'
 import { useClipboard } from '@vueuse/core'
-import { CalendarPlus2, Copy, CopyCheck, Eraser, Flame, Hourglass, Link as LinkIcon, MousePointerClick, QrCode, ShieldAlert, SquareChevronDown, SquarePen, Users } from 'lucide-vue-next'
+import { CalendarPlus2, Copy, CopyCheck, Eraser, Flame, Hourglass, Link as LinkIcon, MousePointerClick, QrCode, ShieldAlert, Shuffle, SquareChevronDown, SquarePen, Users } from 'lucide-vue-next'
 import { parseURL } from 'ufo'
 import { toast } from 'vue-sonner'
 
@@ -67,6 +67,13 @@ function copyLink() {
                 v-if="link.unsafe" variant="destructive" class="ml-1 shrink-0"
               >
                 <ShieldAlert class="h-3 w-3" />
+              </Badge>
+              <Badge
+                v-if="link.targets && link.targets.length >= 2" variant="secondary" class="
+                  ml-1 shrink-0
+                "
+              >
+                <Shuffle class="h-3 w-3" />
               </Badge>
 
               <Button
